@@ -17,19 +17,21 @@ from networks.unetr import UNETR
 from utils.data_utils import get_loader
 from trainer import dice
 import argparse
+import matplotlib.pyplot as plt
+
 
 parser = argparse.ArgumentParser(description='UNETR segmentation pipeline')
 parser.add_argument('--pretrained_dir', default='./pretrained_models/', type=str, help='pretrained checkpoint directory')
 parser.add_argument('--data_dir', default='/dataset/dataset0/', type=str, help='dataset directory')
 parser.add_argument('--json_list', default='dataset_0.json', type=str, help='dataset json file')
-parser.add_argument('--pretrained_model_name', default='UNETR_model_best_acc.pth', type=str, help='pretrained model name')
+parser.add_argument('--pretrained_model_name', default='model_final.pt', type=str, help='pretrained model name')
 parser.add_argument('--saved_checkpoint', default='ckpt', type=str, help='Supports torchscript or ckpt pretrained checkpoint type')
 parser.add_argument('--mlp_dim', default=3072, type=int, help='mlp dimention in ViT encoder')
 parser.add_argument('--hidden_size', default=768, type=int, help='hidden size dimention in ViT encoder')
-parser.add_argument('--feature_size', default=16, type=int, help='feature size dimention')
+parser.add_argument('--feature_size', default=32, type=int, help='feature size dimension')
 parser.add_argument('--infer_overlap', default=0.5, type=float, help='sliding window inference overlap')
 parser.add_argument('--in_channels', default=1, type=int, help='number of input channels')
-parser.add_argument('--out_channels', default=14, type=int, help='number of output channels')
+parser.add_argument('--out_channels', default=3, type=int, help='number of output channels')
 parser.add_argument('--num_heads', default=12, type=int, help='number of attention heads in ViT encoder')
 parser.add_argument('--res_block', action='store_true', help='use residual blocks')
 parser.add_argument('--conv_block', action='store_true', help='use conv blocks')
@@ -78,7 +80,7 @@ def main():
             res_block=True,
             dropout_rate=args.dropout_rate)
         model_dict = torch.load(pretrained_pth)
-        model.load_state_dict(model_dict)
+        model.load_state_dict(model_dict['state_dict'])
     model.eval()
     model.to(device)
 
@@ -97,10 +99,23 @@ def main():
             val_outputs = np.argmax(val_outputs, axis=1).astype(np.uint8)
             val_labels = val_labels.cpu().numpy()[:, 0, :, :, :]
             dice_list_sub = []
-            for i in range(1, 14):
+            for i in range(0, 3):
                 organ_Dice = dice(val_outputs[0] == i, val_labels[0] == i)
                 dice_list_sub.append(organ_Dice)
+                #0 if img_name[26:] in slice_map:
+            plt.figure("check", (18, 6))
+            plt.subplot(1, 3, 1)
+            plt.title("image")
+            plt.imshow(val_inputs.cpu().numpy()[0, 0, :, :, 35], cmap="gray")
+            plt.subplot(1, 3, 2)
+            plt.title("label")
+            plt.imshow(val_labels[0, :, :, 35])
+            plt.subplot(1, 3, 3)
+            plt.title("output")
+            plt.imshow(val_outputs[0, :, :, 35])
+            plt.show()
             mean_dice = np.mean(dice_list_sub)
+            print("Dice By Organ: Background: {:.2f}, Liver: {:2f}, Tumour: {:2f}".format(dice_list_sub[0],dice_list_sub[1],dice_list_sub[2]))
             print("Mean Organ Dice: {}".format(mean_dice))
             dice_list_case.append(mean_dice)
         print("Overall Mean Dice: {}".format(np.mean(dice_list_case)))
